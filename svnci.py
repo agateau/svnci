@@ -10,30 +10,48 @@ class ChangedFile(object):
         self.toBeCommitted = False
 
 
-def getModifiedFiles(selectedFiles = None):
-    if not selectedFiles:
-        selectedFiles = []
-    output = subprocess.Popen(["svn", "status"], stdout=subprocess.PIPE).communicate()[0]
-    lst = []
-    for line in output.split("\n"):
-        line = line.strip()
-        if len(line) == 0:
-            continue
-        status, path = line.split(" ", 1)
-        path = path.strip()
-        changedFile = ChangedFile(status, path)
-        changedFile.toBeCommitted = path in selectedFiles
-        lst.append(changedFile)
+class WorkingCopyState(object):
+    __slots__ = ['files']
+    def __init__(self):
+        self.files = []
 
-    return lst
+
+    def refresh(self):
+        selectedFiles = self.filesToBeCommitted()
+        output = subprocess.Popen(["svn", "status"], stdout=subprocess.PIPE).communicate()[0]
+
+        self.files = []
+        for line in output.split("\n"):
+            line = line.strip()
+            if len(line) == 0:
+                continue
+            status = line[:7]
+            path = line[7:]
+            status = status.strip()
+            path = path.strip()
+            changedFile = ChangedFile(status, path)
+            changedFile.toBeCommitted = path in selectedFiles
+            self.files.append(changedFile)
+
+
+    def modifiedFiles(self):
+        return [x.path for x in self.files]
+
+
+    def filesToBeCommitted(self):
+        return [x.path for x in self.files if x.toBeCommitted]
+
+
+    def filesToAdd(self):
+        return [x.path for x in self.files if x.toBeCommitted and x.status == '?']
 
 
 def printEntry(option, label):
     print "%s: %s" % (option, label)
 
 
-def printModifiedFiles(lst):
-    for pos, fl in enumerate(lst):
+def printWorkingCopyState(state):
+    for pos, fl in enumerate(state.files):
         if fl.toBeCommitted:
             flag = "X"
         else:
@@ -42,18 +60,13 @@ def printModifiedFiles(lst):
         printEntry(str(pos + 1), caption)
 
 
-def addMissingFiles(lst):
-    newFilesLst = [x.path for x in lst if x.toBeCommitted and x.status == '?' ]
-    if len(newFilesLst) > 0:
-        cmd = ["svn", "add"]
-        cmd.extend(newFilesLst)
-        subprocess.call(cmd)
-        return True
-    else:
-        return False
+def svnAdd(lst):
+    cmd = ["svn", "add"]
+    cmd.extend(lst)
+    subprocess.call(cmd)
 
 
-def doCommit(lst):
+def svnCommit(lst):
     cmd = ["svn", "commit"]
     cmd.extend(lst)
     subprocess.call(cmd)
@@ -85,11 +98,12 @@ def main():
 
     (options, args) = parser.parse_args()
 
-    lst = getModifiedFiles()
+    state = WorkingCopyState()
+    state.refresh()
 
     while True:
         print "-" * 30
-        printModifiedFiles(lst)
+        printWorkingCopyState(state)
         printEntry("r", "Refresh")
         printEntry("c", "Commit")
         printEntry("d", "Diff")
@@ -97,27 +111,29 @@ def main():
         print
         option = raw_input("Select an option: ")
 
-        toBeCommittedLst = [x.path for x in lst if x.toBeCommitted]
-
         if option == "q":
             return
 
         elif option == "c":
-            addMissingFiles(lst)
-            doCommit(toBeCommittedLst)
-            lst = getModifiedFiles(toBeCommittedLst)
+            lst = state.filesToAdd()
+            if len(lst) > 0:
+                svnAdd(lst)
+            svnCommit(state.filesToBeCommitted())
+            state.refresh()
 
         elif option == "r":
-            lst = getModifiedFiles(toBeCommittedLst)
+            state.refresh()
 
         elif option == "d":
-            if addMissingFiles(lst):
-                lst = getModifiedFiles(toBeCommittedLst)
-            viewDiff(toBeCommittedLst)
+            lst = state.filesToAdd()
+            if len(lst) > 0:
+                svnAdd(lst)
+                state.refresh()
+            viewDiff(state.filesToBeCommitted())
 
         elif option.isdigit():
             idx = int(option) - 1
-            lst[idx].toBeCommitted = not lst[idx].toBeCommitted
+            state.files[idx].toBeCommitted = not state.files[idx].toBeCommitted
         else:
             print "Unknown option '%s'" % option
 
