@@ -60,6 +60,24 @@ def printWorkingCopyState(state):
         printEntry(str(pos + 1), caption)
 
 
+"""
+Takes a txt of the form "1 2 4-6"
+returns 1,2,4,5,6
+"""
+def parseIndexList(txt):
+    tokenList = txt.split(" ")
+    indexSet = set()
+    for token in tokenList:
+        if "-" in token:
+            start, end = token.split("-")
+            start = int(start)
+            end = int(end)
+            indexSet.update( range(start, end + 1) )
+        else:
+            indexSet.add( int(token) )
+    return indexSet
+
+
 def svnAdd(lst):
     cmd = ["svn", "add"]
     cmd.extend(lst)
@@ -131,9 +149,11 @@ def main():
                 state.refresh()
             viewDiff(state.filesToBeCommitted())
 
-        elif option.isdigit():
-            idx = int(option) - 1
-            state.files[idx].toBeCommitted = not state.files[idx].toBeCommitted
+        elif option[0].isdigit():
+            idxList = parseIndexList(option)
+            for idx in idxList:
+                idx -= 1
+                state.files[idx].toBeCommitted = not state.files[idx].toBeCommitted
         else:
             print "Unknown option '%s'" % option
 
