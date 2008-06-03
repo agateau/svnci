@@ -11,14 +11,17 @@ class ChangedFile(object):
 
 
 class WorkingCopyState(object):
-    __slots__ = ['files']
-    def __init__(self):
+    __slots__ = ['files', 'dirs']
+    def __init__(self, dirs):
+        self.dirs = dirs
         self.files = []
 
 
     def refresh(self):
         selectedFiles = self.filesToBeCommitted()
-        output = subprocess.Popen(["svn", "status"], stdout=subprocess.PIPE).communicate()[0]
+        cmd = ["svn", "status"]
+        cmd.extend(self.dirs)
+        output = subprocess.Popen(cmd, stdout=subprocess.PIPE).communicate()[0]
 
         self.files = []
         for line in output.split("\n"):
@@ -116,7 +119,12 @@ def main():
 
     (options, args) = parser.parse_args()
 
-    state = WorkingCopyState()
+    if len(args) == 0:
+        dirs = ['.']
+    else:
+        dirs = args
+
+    state = WorkingCopyState(dirs)
     state.refresh()
 
     while True:
