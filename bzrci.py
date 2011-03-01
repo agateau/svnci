@@ -1,6 +1,21 @@
 #!/usr/bin/env python
+import os
 from optparse import OptionParser
 import subprocess
+
+def findRepositoryRoot(arg):
+    def isRepositoryRoot(x): return os.path.exists(os.path.join(x, ".bzr"))
+
+    dir_ = os.path.abspath(arg)
+
+    sep = os.path.sep
+    if dir_[-1] == sep:
+        dir_ = dir_[:-1]
+    while not isRepositoryRoot(dir_):
+        if dir_ == sep:
+            raise Exception("Couldn't find repository in %s" % arg)
+        dir_ = os.path.dirname(dir_)
+    return dir_
 
 class ChangedFile(object):
     __slots__ = ['status', 'path', 'toBeCommitted']
@@ -124,9 +139,12 @@ def main():
     (options, args) = parser.parse_args()
 
     if len(args) == 0:
-        dirs = ['.']
+        dirs = [os.getcwd()]
     else:
         dirs = args
+
+    root = findRepositoryRoot(os.getcwd())
+    os.chdir(root)
 
     state = WorkingCopyState(dirs)
     state.refresh()
