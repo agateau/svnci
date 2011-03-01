@@ -103,7 +103,11 @@ def bzrAdd(lst):
 
 
 def bzrCommit(lst):
+    bugId = raw_input("Associated bug id, if any: ")
     cmd = ["bzr", "commit"]
+    if bugId != "":
+        cmd.append("--fixes")
+        cmd.append("lp:%s" % bugId)
     cmd.extend(lst)
     subprocess.call(cmd)
 
